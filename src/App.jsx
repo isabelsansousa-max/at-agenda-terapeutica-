@@ -527,7 +527,7 @@ function MonthView({ events, today }) {
   const total = daysInMonth(y, m);
   const firstWeekday = new Date(y, m, 1).getDay();
   const cells = [...Array(firstWeekday).fill(null), ...Array(total).keys()].map(d => d === null ? null : d + 1);
-  const eventDays = new Set(events.map(e => new Date(e.date).getDate()));
+  const eventDays = new Set(events.map(e => new Date(e.date + "T00:00").getDate()));
 
   return (
     <div style={{ ...card, padding: 14 }}>
@@ -562,7 +562,7 @@ function WeekView({ events, today }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {days.map((d, i) => {
-        const dayEvents = events.filter(e => new Date(e.date).toDateString() === d.toDateString());
+        const dayEvents = events.filter(e => new Date(e.date + "T00:00").toDateString() === d.toDateString());
         const isToday = d.toDateString() === today.toDateString();
         return (
           <div key={i} style={{ ...card, padding: 12, display: "flex", gap: 12, alignItems: "flex-start", border: isToday ? `2px solid ${C.accent}` : "none" }}>
@@ -587,7 +587,7 @@ function WeekView({ events, today }) {
 }
 
 function DayView({ events, today }) {
-  const dayEvents = events.filter(e => new Date(e.date).toDateString() === today.toDateString());
+  const dayEvents = events.filter(e => new Date(e.date + "T00:00").toDateString() === today.toDateString());
   return (
     <div style={{ ...card, padding: 16 }}>
       <div style={{ fontWeight: 700, marginBottom: 10 }}>Hoje, {today.getDate()} de agosto</div>
@@ -614,7 +614,7 @@ function GoalsView({ goals, onNewGoal }) {
       <button style={btnPrimary} onClick={onNewGoal}><Plus size={16} /> Nova meta</button>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
         {goals.map(g => {
-          const days = Math.ceil((new Date(g.deadline) - new Date(2026, 7, 4)) / 864e5);
+          const days = Math.ceil((new Date(g.deadline + "T00:00") - new Date()) / 864e5);
           return (
             <div key={g.id} style={{ ...card, padding: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
