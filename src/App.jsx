@@ -38,55 +38,6 @@ const priorityStyles = {
   baixa: { label: "baixa", color: C.greyBg },
 };
 
-const moodHistory = [
-  { dia: "Seg", humor: 6, foco: 5 },
-  { dia: "Ter", humor: 5, foco: 4 },
-  { dia: "Qua", humor: 7, foco: 6 },
-  { dia: "Qui", humor: 4, foco: 3 },
-  { dia: "Sex", humor: 8, foco: 7 },
-  { dia: "Sáb", humor: 7, foco: 6 },
-  { dia: "Dom", humor: 6, foco: 5 },
-];
-
-// Registros de exemplo dos últimos 7 dias, usados para demonstrar o relatório
-// (na versão real, isso viria inteiramente do histórico de "Registro" do usuário).
-const sampleReportLogs = [
-  { id: "s1", type: "humor", value: 6, timestamp: new Date(2026, 6, 29, 9, 10) },
-  { id: "s2", category: "sentimento", sentimento: "alegria", gatilho: "Consegui terminar uma tarefa", reacao: "Comemorei sozinho", timestamp: new Date(2026, 6, 29, 11, 0) },
-  { id: "s3", category: "desatencao", contexto: "Estudando para a prova", impacto: "Perdi 20 minutos sem perceber", timestamp: new Date(2026, 6, 29, 15, 30) },
-  { id: "s4", category: "medicacao", nome: "Ritalina 10mg", horario: "08:00", sensacao: "bem", detalhe: "", timestamp: new Date(2026, 6, 29, 8, 0) },
-
-  { id: "s5", type: "ansiedade", value: 7, timestamp: new Date(2026, 6, 30, 10, 0) },
-  { id: "s6", category: "sentimento", sentimento: "tristeza", gatilho: "Cobrança da família", reacao: "Fiquei quieto no quarto", timestamp: new Date(2026, 6, 30, 20, 15) },
-  { id: "s7", category: "impulsividade", contexto: "No meio de uma discussão", impacto: "Respondi de forma grossa", timestamp: new Date(2026, 6, 30, 20, 30) },
-  { id: "s8", category: "medicacao", nome: "Ritalina 10mg", horario: "08:05", sensacao: "bem", detalhe: "", timestamp: new Date(2026, 6, 30, 8, 5) },
-
-  { id: "s9", type: "foco", value: 4, timestamp: new Date(2026, 6, 31, 14, 0) },
-  { id: "s10", category: "sentimento", sentimento: "raiva", gatilho: "Trânsito", reacao: "Buzinei e xinguei", timestamp: new Date(2026, 6, 31, 18, 0) },
-  { id: "s11", category: "desatencao", contexto: "Reunião de trabalho", impacto: "Perdi um combinado importante", timestamp: new Date(2026, 6, 31, 11, 0) },
-  { id: "s12", category: "medicacao", nome: "Ritalina 10mg", horario: "08:00", sensacao: "efeito", detalhe: "Sonolência à tarde", timestamp: new Date(2026, 6, 31, 8, 0) },
-
-  { id: "s13", type: "sono", value: 5, timestamp: new Date(2026, 7, 1, 7, 30) },
-  { id: "s14", category: "sentimento", sentimento: "medo", gatilho: "Prazo apertado da faculdade", reacao: "Evitei abrir o material", timestamp: new Date(2026, 7, 1, 21, 0) },
-  { id: "s15", category: "impulsividade", contexto: "Compra online", impacto: "Gastei mais do que planejava", timestamp: new Date(2026, 7, 1, 22, 0) },
-  { id: "s16", category: "medicacao", nome: "Ritalina 10mg", horario: "08:00", sensacao: "bem", detalhe: "", timestamp: new Date(2026, 7, 1, 8, 0) },
-
-  { id: "s17", type: "procrastinacao", value: 8, timestamp: new Date(2026, 7, 2, 16, 0) },
-  { id: "s18", category: "sentimento", sentimento: "alegria", gatilho: "Elogio no trabalho", reacao: "Compartilhei com um amigo", timestamp: new Date(2026, 7, 2, 17, 30) },
-  { id: "s19", category: "desatencao", contexto: "Lendo um e-mail importante", impacto: "Tive que reler três vezes", timestamp: new Date(2026, 7, 2, 10, 0) },
-  { id: "s20", category: "medicacao", nome: "Ritalina 10mg", horario: "08:10", sensacao: "bem", detalhe: "", timestamp: new Date(2026, 7, 2, 8, 10) },
-
-  { id: "s21", type: "cafeina", value: 3, timestamp: new Date(2026, 7, 3, 9, 0) },
-  { id: "s22", category: "sentimento", sentimento: "tristeza", gatilho: "Cansaço acumulado", reacao: "Cancelei um compromisso social", timestamp: new Date(2026, 7, 3, 19, 0) },
-  { id: "s23", category: "desatencao", contexto: "Estudando à noite", impacto: "Não terminei o capítulo planejado", timestamp: new Date(2026, 7, 3, 21, 0) },
-  { id: "s24", category: "medicacao", nome: "Ritalina 10mg", horario: "08:00", sensacao: "efeito", detalhe: "Boca seca", timestamp: new Date(2026, 7, 3, 8, 0) },
-
-  { id: "s25", type: "humor", value: 7, timestamp: new Date(2026, 7, 4, 8, 30) },
-  { id: "s26", category: "sentimento", sentimento: "alegria", gatilho: "Comecei o dia bem organizado", reacao: "Segui a lista de prioridades", timestamp: new Date(2026, 7, 4, 9, 0) },
-  { id: "s27", category: "impulsividade", contexto: "Durante o almoço", impacto: "Interrompi um colega falando", timestamp: new Date(2026, 7, 4, 12, 30) },
-  { id: "s28", category: "medicacao", nome: "Ritalina 10mg", horario: "08:00", sensacao: "bem", detalhe: "", timestamp: new Date(2026, 7, 4, 8, 0) },
-];
-
 const feelings = [
   { key: "alegria", label: "Alegria", icon: Smile, color: C.yellow },
   { key: "raiva", label: "Raiva", icon: Angry, color: C.peach },
@@ -269,7 +220,7 @@ function MainApp({ userId, onSignOut }) {
     <div style={{ background: C.greyBg, minHeight: "100vh", fontFamily: "'Segoe UI', Roboto, -apple-system, sans-serif", color: C.text }}>
       <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: showReport ? 0 : 88, position: "relative" }}>
         {showReport ? (
-          <ReportView logs={[...sampleReportLogs, ...logs]} onBack={() => setShowReport(false)} />
+          <ReportView logs={logs} onBack={() => setShowReport(false)} />
         ) : (
           <>
             {tab === "inicio" && <Dashboard state={state} setState={setState} tasks={tasks} events={events} today={today} onNewTask={() => setShowTaskModal(true)} onToggleTask={(t) => { setTasks(tasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x)); updateRow("tasks", t.id, { done: !t.done }); }} />}
@@ -290,7 +241,7 @@ function MainApp({ userId, onSignOut }) {
                 logs={logs} logFilter={logFilter} setLogFilter={setLogFilter}
               />
             )}
-            {tab === "progresso" && <Progresso />}
+            {tab === "progresso" && <Progresso logs={logs} />}
             {tab === "solucoes" && (
               <Solucoes personalTips={personalTips} onNewTip={() => setShowTipModal(true)} />
             )}
@@ -974,40 +925,60 @@ function Solucoes({ personalTips, onNewTip }) {
 }
 
 // ---------- Progresso ----------
-function Progresso() {
+function Progresso({ logs }) {
+  const weekChart = useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const dayLogs = logs.filter(l => !l.category && l.timestamp.toISOString().slice(0, 10) === key);
+      const avg = (type) => {
+        const vals = dayLogs.filter(l => l.type === type).map(l => l.value);
+        return vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null;
+      };
+      days.push({ dia: d.toLocaleDateString("pt-BR", { weekday: "short" }), humor: avg("humor"), foco: avg("foco") });
+    }
+    return days;
+  }, [logs]);
+
+  const hasQuickLogs = logs.some(l => !l.category);
+  const diasComRegistro = new Set(logs.map(l => l.timestamp.toISOString().slice(0, 10))).size;
+
   return (
     <div style={{ padding: "24px 20px 12px" }}>
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>Progresso</h1>
 
       <div style={{ ...card, padding: 16, marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Humor e foco — últimos 7 dias</div>
-        <ResponsiveContainer width="100%" height={180}>
-          <LineChart data={moodHistory}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#EEE" />
-            <XAxis dataKey="dia" tick={{ fontSize: 11 }} />
-            <YAxis domain={[0, 10]} tick={{ fontSize: 11 }} />
-            <Tooltip />
-            <Line type="monotone" dataKey="humor" stroke={C.accent} strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="foco" stroke={C.green} strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div style={{ ...card, padding: 16, background: C.yellow, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-        <Sparkles size={22} />
-        <div style={{ fontSize: 13 }}>Seu foco tende a ser melhor nas sextas e mais baixo nas quintas — pode valer revisar sua rotina desses dias com seu terapeuta.</div>
+        {hasQuickLogs ? (
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={weekChart}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#EEE" />
+              <XAxis dataKey="dia" tick={{ fontSize: 11 }} />
+              <YAxis domain={[0, 10]} tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Line type="monotone" dataKey="humor" stroke={C.accent} strokeWidth={2} connectNulls dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="foco" stroke={C.green} strokeWidth={2} connectNulls dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div style={{ fontSize: 13, color: C.textSoft, padding: "20px 0", textAlign: "center" }}>
+            Ainda sem registros de humor ou foco. Use o Registro rápido para começar a ver seu gráfico aqui.
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 12 }}>
         <div style={{ ...card, flex: 1, padding: 14, textAlign: "center" }}>
           <Flame color={C.peach} style={{ margin: "0 auto 4px" }} />
-          <div style={{ fontWeight: 700 }}>5 dias</div>
-          <div style={{ fontSize: 11, color: C.textSoft }}>sequência de registros</div>
+          <div style={{ fontWeight: 700 }}>{diasComRegistro}</div>
+          <div style={{ fontSize: 11, color: C.textSoft }}>dias com registro</div>
         </div>
         <div style={{ ...card, flex: 1, padding: 14, textAlign: "center" }}>
           <Award color={C.lilac} style={{ margin: "0 auto 4px" }} />
-          <div style={{ fontWeight: 700 }}>3 conquistas</div>
-          <div style={{ fontSize: 11, color: C.textSoft }}>este mês</div>
+          <div style={{ fontWeight: 700 }}>{logs.length}</div>
+          <div style={{ fontSize: 11, color: C.textSoft }}>registros no total</div>
         </div>
       </div>
     </div>
