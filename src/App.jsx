@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell,
+  BarChart, Bar, Cell, PieChart, Pie,
 } from "recharts";
 import { supabase } from "./lib/supabaseClient";
 
@@ -162,7 +162,6 @@ function MainApp({ userId, onSignOut }) {
   const [tasks, setTasks] = useState([]);
   const [logs, setLogs] = useState([]);
   const [personalTips, setPersonalTips] = useState([]);
-  const [state, setState] = useState({ energia: 6, humor: 6, sono: 7, foco: 5, estresse: 4 });
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showQuickLog, setShowQuickLog] = useState(null);
   const [showEventModal, setShowEventModal] = useState(false);
@@ -171,6 +170,8 @@ function MainApp({ userId, onSignOut }) {
   const [showTipModal, setShowTipModal] = useState(false);
   const [diaryStep, setDiaryStep] = useState(null); // 'sentimento' | 'desatencao' | 'impulsividade' | null
   const [logFilter, setLogFilter] = useState("todos");
+  const [selectedGoalId, setSelectedGoalId] = useState(null);
+  const [editingLog, setEditingLog] = useState(null);
   const [showReport, setShowReport] = useState(false);
 
   const today = new Date();
@@ -223,7 +224,7 @@ function MainApp({ userId, onSignOut }) {
           <ReportView logs={logs} onBack={() => setShowReport(false)} />
         ) : (
           <>
-            {tab === "inicio" && <Dashboard state={state} setState={setState} tasks={tasks} events={events} today={today} onNewTask={() => setShowTaskModal(true)} onToggleTask={(t) => { setTasks(tasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x)); updateRow("tasks", t.id, { done: !t.done }); }} />}
+            {tab === "inicio" && <Dashboard tasks={tasks} events={events} today={today} onNewTask={() => setShowTaskModal(true)} onToggleTask={(t) => { setTasks(tasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x)); updateRow("tasks", t.id, { done: !t.done }); }} />}
             {tab === "agenda" && (
               <Agenda
                 sub={agendaSub} setSub={setAgendaSub}
@@ -231,6 +232,8 @@ function MainApp({ userId, onSignOut }) {
                 goals={goals} events={events} today={today}
                 onNewGoal={() => setShowGoalModal(true)}
                 onNewEvent={() => setShowEventModal(true)}
+                onOpenGoal={(id) => setSelectedGoalId(id)}
+                onToggleEvent={(e) => { setEvents(events.map(x => x.id === e.id ? { ...x, done: !x.done } : x)); updateRow("appointments", e.id, { done: !e.done }); }}
               />
             )}
             {tab === "registro" && (
@@ -238,6 +241,7 @@ function MainApp({ userId, onSignOut }) {
                 onQuickLog={(t) => setShowQuickLog(t)}
                 onDiary={(step) => setDiaryStep(step)}
                 onMedication={() => setShowMedicationModal(true)}
+                onEditLog={(log) => setEditingLog(log)}
                 logs={logs} logFilter={logFilter} setLogFilter={setLogFilter}
               />
             )}
@@ -321,6 +325,70 @@ function MainApp({ userId, onSignOut }) {
             }}
           />
         )}
+        {selectedGoalId && (() => {
+          const goal = goals.find(g => g.id === selectedGoalId);
+          if (!goal) return null;
+          const microGoals = goals.filter(g => g.parent_goal_id === selectedGoalId);
+          return (
+            <GoalDetailModal
+              goal={goal}
+              microGoals={microGoals}
+              onClose={() => setSelectedGoalId(null)}
+              onUpdateDeadline={async (deadline) => {
+                setGoals(goals.map(g => g.id === goal.id ? { ...g, deadline } : g));
+                await updateRow("goals", goal.id, { deadline });
+              }}
+              onAddMicroGoal={async ({ title, deadline }) => {
+                const row = await insertRow("goals", { title, deadline, parent_goal_id: goal.id });
+                if (row) setGoals([...goals, { ...row, color: C.lilac }]);
+              }}
+              onToggleMicroGoal={async (mg) => {
+                const newDone = !mg.done;
+                const updated = goals.map(g => g.id === mg.id ? { ...g, done: newDone } : g);
+                const siblings = updated.filter(g => g.parent_goal_id === goal.id);
+                const newProgress = siblings.length ? Math.round((siblings.filter(s => s.done).length / siblings.length) * 100) : goal.progress;
+                setGoals(updated.map(g => g.id === goal.id ? { ...g, progress: newProgress } : g));
+                await updateRow("goals", mg.id, { done: newDone });
+                await updateRow("goals", goal.id, { progress: newProgress });
+              }}
+            />
+          );
+        })()}
+        {editingLog && !editingLog.category && (
+          <QuickLogModal
+            type={editingLog.type}
+            initial={editingLog}
+            onClose={() => setEditingLog(null)}
+            onSave={async (val) => {
+              await updateRow("quick_logs", editingLog.id, { value: val });
+              setLogs(logs.map(l => l.id === editingLog.id ? { ...l, value: val } : l));
+              setEditingLog(null);
+            }}
+          />
+        )}
+        {editingLog && ["sentimento", "desatencao", "impulsividade"].includes(editingLog.category) && (
+          <DiaryModal
+            step={editingLog.category}
+            initial={editingLog}
+            onClose={() => setEditingLog(null)}
+            onSave={async (entry) => {
+              await updateRow("symptom_emotion_logs", editingLog.id, entry);
+              setLogs(logs.map(l => l.id === editingLog.id ? { ...l, ...entry } : l));
+              setEditingLog(null);
+            }}
+          />
+        )}
+        {editingLog && editingLog.category === "medicacao" && (
+          <MedicationModal
+            initial={editingLog}
+            onClose={() => setEditingLog(null)}
+            onSave={async (entry) => {
+              await updateRow("medication_logs", editingLog.id, entry);
+              setLogs(logs.map(l => l.id === editingLog.id ? { ...l, ...entry } : l));
+              setEditingLog(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -357,29 +425,42 @@ function TabBar({ tab, setTab }) {
 }
 
 // ---------- Dashboard ----------
-function Dashboard({ state, setState, tasks, events, today, onNewTask, onToggleTask }) {
+function Dashboard({ tasks, events, today, onNewTask, onToggleTask }) {
   const [phrase, setPhrase] = useState("");
   const [phraseSaved, setPhraseSaved] = useState(false);
+  const [selectedSlice, setSelectedSlice] = useState(null);
   const next = events
     .map(e => ({ ...e, dt: new Date(`${e.date}T${e.time}`) }))
     .filter(e => e.dt > today)
     .sort((a, b) => a.dt - b.dt)[0];
 
   const hoursLeft = next ? Math.max(0, Math.round((next.dt - today) / 36e5)) : null;
-  const doneCount = tasks.filter(t => t.done).length;
 
-  const metrics = [
-    { key: "energia", label: "Energia", color: C.yellow },
-    { key: "humor", label: "Humor", color: C.peach },
-    { key: "sono", label: "Sono", color: C.blue },
-    { key: "foco", label: "Foco", color: C.green },
-    { key: "estresse", label: "Estresse", color: C.lilac },
+  // Monta o "relógio" do dia: uma fatia por tarefa de hoje com duração definida.
+  const todayKey = today.toISOString().slice(0, 10);
+  const todaysTasks = tasks.filter(t => t.date === todayKey && t.duration_minutes);
+  const scheduledMinutes = todaysTasks.reduce((sum, t) => sum + t.duration_minutes, 0);
+  const freeMinutes = Math.max(0, 1440 - scheduledMinutes);
+  const palette = [C.blue, C.green, C.peach, C.lilac, C.yellow];
+  const pieData = [
+    ...todaysTasks.map((t, i) => ({
+      id: t.id, name: t.title, value: t.duration_minutes,
+      color: t.done ? "#D7DAE0" : palette[i % palette.length],
+    })),
+    { id: "livre", name: "Livre", value: freeMinutes, color: "#F2F3F5" },
   ];
+
+  function formatDuration(mins) {
+    const h = Math.floor(mins / 60), m = mins % 60;
+    if (h && m) return `${h}h${m}min`;
+    if (h) return `${h}h`;
+    return `${m}min`;
+  }
 
   return (
     <div style={{ padding: "24px 20px 12px" }}>
       <p style={{ color: C.textSoft, fontSize: 14, marginBottom: 2 }}>{today.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}</p>
-      <h1 style={{ fontSize: 24, fontWeight: 700, margin: "0 0 16px" }}>Como você está hoje?</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 700, margin: "0 0 16px" }}>Como vai ser o seu dia?</h1>
 
       <div style={{ ...card, padding: 16, marginBottom: 18, background: C.yellow }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
@@ -421,20 +502,40 @@ function Dashboard({ state, setState, tasks, events, today, onNewTask, onToggleT
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-        {metrics.map(m => (
-          <div key={m.key} style={{ ...card, padding: 14 }}>
-            <div style={{ fontSize: 13, color: C.textSoft, marginBottom: 8 }}>{m.label}</div>
-            <input type="range" min={0} max={10} value={state[m.key]}
-              onChange={e => setState({ ...state, [m.key]: Number(e.target.value) })}
-              style={{ width: "100%", accentColor: m.color }} />
-            <div style={{ textAlign: "right", fontSize: 13, fontWeight: 600 }}>{state[m.key]}/10</div>
+      <div style={{ ...card, padding: 16, marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Relógio do dia</div>
+        <ResponsiveContainer width="100%" height={220}>
+          <PieChart>
+            <Pie
+              data={pieData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              innerRadius={55}
+              outerRadius={95}
+              startAngle={90}
+              endAngle={-270}
+              onClick={(_, index) => setSelectedSlice(pieData[index])}
+            >
+              {pieData.map((d, i) => (
+                <Cell key={d.id} fill={d.color} stroke={C.white} strokeWidth={2} style={{ cursor: "pointer" }} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        {selectedSlice ? (
+          <div style={{ textAlign: "center", fontSize: 14 }}>
+            <strong>{selectedSlice.name}</strong> — {formatDuration(selectedSlice.value)}
           </div>
-        ))}
-        <div style={{ ...card, padding: 14, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", background: C.green }}>
-          <div style={{ fontSize: 24, fontWeight: 700 }}>{doneCount}/{tasks.length}</div>
-          <div style={{ fontSize: 12, color: C.text }}>tarefas concluídas hoje</div>
-        </div>
+        ) : (
+          <div style={{ textAlign: "center", fontSize: 12, color: C.textSoft }}>Toque numa fatia para ver os detalhes</div>
+        )}
+        {todaysTasks.length === 0 && (
+          <div style={{ fontSize: 12, color: C.textSoft, textAlign: "center", marginTop: 8 }}>
+            Defina a duração das tarefas de hoje (botão "+" abaixo) para preencher o relógio.
+          </div>
+        )}
       </div>
 
       <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -449,11 +550,12 @@ function Dashboard({ state, setState, tasks, events, today, onNewTask, onToggleT
               <input type="checkbox" checked={t.done} onChange={() => onToggleTask(t)} />
               <div style={{ flex: 1 }}>
                 <div style={{ textDecoration: t.done ? "line-through" : "none", color: t.done ? C.textSoft : C.text, fontSize: 14 }}>{t.title}</div>
-                {(t.date || t.time) && (
+                {(t.date || t.time || t.duration_minutes) && (
                   <div style={{ fontSize: 11, color: C.textSoft, marginTop: 2 }}>
                     {t.date && new Date(t.date + "T00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
                     {t.date && t.time && " · "}
                     {t.time}
+                    {t.duration_minutes && ` · ${Math.floor(t.duration_minutes / 60) ? Math.floor(t.duration_minutes / 60) + "h" : ""}${t.duration_minutes % 60 ? (t.duration_minutes % 60) + "min" : ""}`}
                   </div>
                 )}
               </div>
@@ -467,7 +569,7 @@ function Dashboard({ state, setState, tasks, events, today, onNewTask, onToggleT
 }
 
 // ---------- Agenda (Calendário + Metas) ----------
-function Agenda({ sub, setSub, calView, setCalView, goals, events, today, onNewGoal, onNewEvent }) {
+function Agenda({ sub, setSub, calView, setCalView, goals, events, today, onNewGoal, onNewEvent, onOpenGoal, onToggleEvent }) {
   return (
     <div style={{ padding: "24px 20px 12px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -501,11 +603,11 @@ function Agenda({ sub, setSub, calView, setCalView, goals, events, today, onNewG
             ))}
           </div>
           {calView === "mes" && <MonthView events={events} today={today} />}
-          {calView === "semana" && <WeekView events={events} today={today} />}
-          {calView === "dia" && <DayView events={events} today={today} />}
+          {calView === "semana" && <WeekView events={events} today={today} onToggleEvent={onToggleEvent} />}
+          {calView === "dia" && <DayView events={events} today={today} onToggleEvent={onToggleEvent} />}
         </>
       ) : (
-        <GoalsView goals={goals} onNewGoal={onNewGoal} />
+        <GoalsView goals={goals} onNewGoal={onNewGoal} onOpenGoal={onOpenGoal} />
       )}
     </div>
   );
@@ -556,7 +658,7 @@ function MonthView({ events, today }) {
   );
 }
 
-function WeekView({ events, today }) {
+function WeekView({ events, today, onToggleEvent }) {
   const start = new Date(today); start.setDate(today.getDate() - today.getDay());
   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
   return (
@@ -573,10 +675,11 @@ function WeekView({ events, today }) {
             <div style={{ flex: 1 }}>
               {dayEvents.length === 0 ? <span style={{ fontSize: 12, color: C.textSoft }}>Sem compromissos</span> :
                 dayEvents.map(e => (
-                  <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginBottom: 2 }}>
-                    <span>🕒 {e.time} — {e.title}</span>
+                  <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginBottom: 4, cursor: "pointer" }}>
+                    <input type="checkbox" checked={!!e.done} onChange={() => onToggleEvent(e)} />
+                    <span style={{ textDecoration: e.done ? "line-through" : "none", color: e.done ? C.textSoft : C.text }}>🕒 {e.time} — {e.title}</span>
                     {e.priority && <PriorityBadge priority={e.priority} />}
-                  </div>
+                  </label>
                 ))}
             </div>
           </div>
@@ -586,18 +689,19 @@ function WeekView({ events, today }) {
   );
 }
 
-function DayView({ events, today }) {
+function DayView({ events, today, onToggleEvent }) {
   const dayEvents = events.filter(e => new Date(e.date + "T00:00").toDateString() === today.toDateString());
   return (
     <div style={{ ...card, padding: 16 }}>
-      <div style={{ fontWeight: 700, marginBottom: 10 }}>Hoje, {today.getDate()} de agosto</div>
+      <div style={{ fontWeight: 700, marginBottom: 10 }}>Hoje, {today.toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</div>
       {dayEvents.length === 0 && <div style={{ color: C.textSoft, fontSize: 13 }}>Nenhum compromisso hoje.</div>}
       {dayEvents.map(e => (
-        <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderTop: "1px solid #EEE" }}>
+        <label key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderTop: "1px solid #EEE", cursor: "pointer" }}>
+          <input type="checkbox" checked={!!e.done} onChange={() => onToggleEvent(e)} />
           <div style={{ fontSize: 13, color: C.accentDark, fontWeight: 700, minWidth: 46 }}>{e.time}</div>
-          <div style={{ fontSize: 14, flex: 1 }}>{e.title}</div>
+          <div style={{ fontSize: 14, flex: 1, textDecoration: e.done ? "line-through" : "none", color: e.done ? C.textSoft : C.text }}>{e.title}</div>
           {e.priority && <PriorityBadge priority={e.priority} />}
-        </div>
+        </label>
       ))}
     </div>
   );
@@ -608,28 +712,99 @@ function PriorityBadge({ priority }) {
   return <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: p.color, whiteSpace: "nowrap" }}>{p.label}</span>;
 }
 
-function GoalsView({ goals, onNewGoal }) {
+function GoalProgressBar({ progress, microGoals }) {
+  return (
+    <div style={{ position: "relative", height: 16 }}>
+      <div style={{ position: "absolute", top: 4, left: 0, right: 0, background: C.greyBg, borderRadius: 999, height: 8, overflow: "hidden" }}>
+        <div style={{ width: `${progress}%`, background: C.accentDark, height: "100%" }} />
+      </div>
+      {microGoals.map((mg, i) => {
+        const left = microGoals.length === 1 ? 50 : (i / (microGoals.length - 1)) * 100;
+        return (
+          <div key={mg.id} title={mg.title} style={{
+            position: "absolute", top: 0, left: `${left}%`, transform: "translateX(-50%)",
+            width: 16, height: 16, borderRadius: "50%",
+            background: mg.done ? C.accentDark : C.white,
+            border: `2px solid ${C.accentDark}`, boxSizing: "border-box",
+          }} />
+        );
+      })}
+    </div>
+  );
+}
+
+function GoalsView({ goals, onNewGoal, onOpenGoal }) {
+  const topGoals = goals.filter(g => !g.parent_goal_id);
   return (
     <div>
       <button style={btnPrimary} onClick={onNewGoal}><Plus size={16} /> Nova meta</button>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
-        {goals.map(g => {
+        {topGoals.map(g => {
+          const micro = goals.filter(mg => mg.parent_goal_id === g.id);
+          const doneCount = micro.filter(m => m.done).length;
+          const progress = micro.length ? Math.round((doneCount / micro.length) * 100) : g.progress;
           const days = Math.ceil((new Date(g.deadline + "T00:00") - new Date()) / 864e5);
           return (
-            <div key={g.id} style={{ ...card, padding: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+            <div key={g.id} onClick={() => onOpenGoal(g.id)} style={{ ...card, padding: 16, cursor: "pointer" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
                 <strong style={{ fontSize: 14 }}>{g.title}</strong>
                 <span style={{ fontSize: 12, color: C.textSoft }}>{days > 0 ? `${days}d restantes` : "Prazo vencido"}</span>
               </div>
-              <div style={{ background: C.greyBg, borderRadius: 999, height: 8, overflow: "hidden" }}>
-                <div style={{ width: `${g.progress}%`, background: g.color, height: "100%" }} />
+              <GoalProgressBar progress={progress} microGoals={micro} />
+              <div style={{ fontSize: 12, color: C.textSoft, marginTop: 8 }}>
+                {progress}% concluído{micro.length ? ` · ${doneCount}/${micro.length} micrometas` : ""}
               </div>
-              <div style={{ fontSize: 12, color: C.textSoft, marginTop: 6 }}>{g.progress}% concluído</div>
             </div>
           );
         })}
       </div>
     </div>
+  );
+}
+
+function GoalDetailModal({ goal, microGoals, onClose, onUpdateDeadline, onAddMicroGoal, onToggleMicroGoal }) {
+  const [deadline, setDeadline] = useState(goal.deadline);
+  const [newTitle, setNewTitle] = useState("");
+  const [newDeadline, setNewDeadline] = useState("");
+
+  const doneCount = microGoals.filter(m => m.done).length;
+  const progress = microGoals.length ? Math.round((doneCount / microGoals.length) * 100) : goal.progress;
+
+  return (
+    <Modal onClose={onClose} title={goal.title}>
+      <Field label="Prazo da meta geral">
+        <input type="date" style={input} value={deadline} onChange={e => { setDeadline(e.target.value); onUpdateDeadline(e.target.value); }} />
+      </Field>
+
+      <GoalProgressBar progress={progress} microGoals={microGoals} />
+      <div style={{ fontSize: 12, color: C.textSoft, margin: "10px 0 20px" }}>
+        {progress}% concluído{microGoals.length ? ` · ${doneCount}/${microGoals.length} micrometas` : ""}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Micrometas</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+        {microGoals.length === 0 && <div style={{ fontSize: 12, color: C.textSoft }}>Nenhuma micrometa ainda — adicione a primeira abaixo.</div>}
+        {microGoals.map(mg => (
+          <label key={mg.id} style={{ ...card, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+            <input type="checkbox" checked={!!mg.done} onChange={() => onToggleMicroGoal(mg)} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, textDecoration: mg.done ? "line-through" : "none", color: mg.done ? C.textSoft : C.text }}>{mg.title}</div>
+              <div style={{ fontSize: 11, color: C.textSoft }}>{new Date(mg.deadline + "T00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</div>
+            </div>
+          </label>
+        ))}
+      </div>
+
+      <Field label="Nova micrometa"><input style={input} value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Ex: Ler 1 capítulo por semana" /></Field>
+      <Field label="Prazo da micrometa"><input type="date" style={input} value={newDeadline} onChange={e => setNewDeadline(e.target.value)} /></Field>
+      <button
+        style={btnPrimary}
+        disabled={!newTitle || !newDeadline}
+        onClick={() => { onAddMicroGoal({ title: newTitle, deadline: newDeadline }); setNewTitle(""); setNewDeadline(""); }}
+      >
+        <Plus size={16} /> Adicionar micrometa
+      </button>
+    </Modal>
   );
 }
 
@@ -650,6 +825,8 @@ function TaskModal({ onClose, onSave }) {
   const [priority, setPriority] = useState("media");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [durH, setDurH] = useState(0);
+  const [durM, setDurM] = useState(0);
   return (
     <Modal onClose={onClose} title="Nova tarefa">
       <Field label="Título da tarefa"><input style={input} value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Revisar relatório" /></Field>
@@ -665,7 +842,23 @@ function TaskModal({ onClose, onSave }) {
       </Field>
       <Field label="Data (opcional)"><input type="date" style={input} value={date} onChange={e => setDate(e.target.value)} /></Field>
       <Field label="Horário (opcional)"><input type="time" style={input} value={time} onChange={e => setTime(e.target.value)} /></Field>
-      <button style={btnPrimary} disabled={!title} onClick={() => title && onSave({ title, priority, date, time })}>Salvar tarefa</button>
+      <Field label="Duração prevista (opcional — preenche o relógio do dia)">
+        <div style={{ display: "flex", gap: 8 }}>
+          <select value={durH} onChange={e => setDurH(Number(e.target.value))} style={{ ...input, flex: 1 }}>
+            {Array.from({ length: 13 }, (_, h) => <option key={h} value={h}>{h}h</option>)}
+          </select>
+          <select value={durM} onChange={e => setDurM(Number(e.target.value))} style={{ ...input, flex: 1 }}>
+            {[0, 15, 30, 45].map(m => <option key={m} value={m}>{m}min</option>)}
+          </select>
+        </div>
+      </Field>
+      <button
+        style={btnPrimary}
+        disabled={!title}
+        onClick={() => title && onSave({ title, priority, date, time, duration_minutes: (durH * 60 + durM) || null })}
+      >
+        Salvar tarefa
+      </button>
     </Modal>
   );
 }
@@ -696,7 +889,7 @@ function EventModal({ onClose, onSave }) {
 }
 
 // ---------- Registro ----------
-function Registro({ onQuickLog, onDiary, onMedication, logs, logFilter, setLogFilter }) {
+function Registro({ onQuickLog, onDiary, onMedication, onEditLog, logs, logFilter, setLogFilter }) {
   const filtered = logFilter === "todos" ? logs : logs.filter(l => l.type === logFilter || l.category === logFilter);
   return (
     <div style={{ padding: "24px 20px 12px" }}>
@@ -731,6 +924,7 @@ function Registro({ onQuickLog, onDiary, onMedication, logs, logFilter, setLogFi
       </div>
 
       <h2 style={sectionTitle}>Histórico</h2>
+      <p style={{ fontSize: 12, color: C.textSoft, marginTop: -6, marginBottom: 10 }}>Toque em um registro para corrigir algo que digitou errado.</p>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {["todos", "sentimento", "desatencao", "impulsividade", "medicacao", ...quickLogTypes.map(q => q.key)].map(f => (
           <button key={f} onClick={() => setLogFilter(f)} style={{
@@ -741,18 +935,18 @@ function Registro({ onQuickLog, onDiary, onMedication, logs, logFilter, setLogFi
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {filtered.length === 0 && <div style={{ fontSize: 13, color: C.textSoft }}>Nenhum registro ainda hoje.</div>}
-        {filtered.map(l => <LogItem key={l.id} log={l} />)}
+        {filtered.map(l => <LogItem key={l.id} log={l} onEdit={onEditLog} />)}
       </div>
     </div>
   );
 }
 
-function LogItem({ log }) {
+function LogItem({ log, onEdit }) {
   const time = log.timestamp.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   if (log.category === "sentimento") {
     const f = feelings.find(f => f.key === log.sentimento);
     return (
-      <div style={{ ...card, padding: 12 }}>
+      <div onClick={() => onEdit(log)} style={{ ...card, padding: 12, cursor: "pointer" }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.textSoft }}>
           <span>{f?.label || log.sentimento}</span><span>{time}</span>
         </div>
@@ -763,7 +957,7 @@ function LogItem({ log }) {
   }
   if (log.category === "desatencao" || log.category === "impulsividade") {
     return (
-      <div style={{ ...card, padding: 12 }}>
+      <div onClick={() => onEdit(log)} style={{ ...card, padding: 12, cursor: "pointer" }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.textSoft }}>
           <span>{log.category === "desatencao" ? "Desatenção" : "Impulsividade"}</span><span>{time}</span>
         </div>
@@ -774,7 +968,7 @@ function LogItem({ log }) {
   }
   if (log.category === "medicacao") {
     return (
-      <div style={{ ...card, padding: 12 }}>
+      <div onClick={() => onEdit(log)} style={{ ...card, padding: 12, cursor: "pointer" }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.textSoft }}>
           <span>Medicação — {log.nome}</span><span>{log.horario}</span>
         </div>
@@ -783,35 +977,35 @@ function LogItem({ log }) {
     );
   }
   return (
-    <div style={{ ...card, padding: 12, display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+    <div onClick={() => onEdit(log)} style={{ ...card, padding: 12, display: "flex", justifyContent: "space-between", fontSize: 13, cursor: "pointer" }}>
       <span>{quickLogTypes.find(q => q.key === log.type)?.label}: {log.value}/10</span>
       <span style={{ color: C.textSoft, fontSize: 12 }}>{time}</span>
     </div>
   );
 }
 
-function QuickLogModal({ type, onClose, onSave }) {
-  const [val, setVal] = useState(5);
+function QuickLogModal({ type, initial, onClose, onSave }) {
+  const [val, setVal] = useState(initial ? initial.value : 5);
   const label = quickLogTypes.find(q => q.key === type)?.label;
   return (
-    <Modal onClose={onClose} title={label}>
+    <Modal onClose={onClose} title={initial ? `Editar ${label}` : label}>
       <input type="range" min={0} max={10} value={val} onChange={e => setVal(Number(e.target.value))} style={{ width: "100%", accentColor: C.accent }} />
       <div style={{ textAlign: "center", fontWeight: 700, fontSize: 20, margin: "8px 0 16px" }}>{val}/10</div>
-      <button style={btnPrimary} onClick={() => onSave(val)}>Salvar</button>
+      <button style={btnPrimary} onClick={() => onSave(val)}>{initial ? "Salvar alterações" : "Salvar"}</button>
     </Modal>
   );
 }
 
-function DiaryModal({ step, onClose, onSave }) {
-  const [sentimento, setSentimento] = useState(null);
-  const [gatilho, setGatilho] = useState("");
-  const [reacao, setReacao] = useState("");
-  const [contexto, setContexto] = useState("");
-  const [impacto, setImpacto] = useState("");
+function DiaryModal({ step, initial, onClose, onSave }) {
+  const [sentimento, setSentimento] = useState(initial ? initial.sentimento : null);
+  const [gatilho, setGatilho] = useState(initial ? initial.gatilho || "" : "");
+  const [reacao, setReacao] = useState(initial ? initial.reacao || "" : "");
+  const [contexto, setContexto] = useState(initial ? initial.contexto || "" : "");
+  const [impacto, setImpacto] = useState(initial ? initial.impacto || "" : "");
 
   if (step === "sentimento") {
     return (
-      <Modal onClose={onClose} title="Como você se sentiu?">
+      <Modal onClose={onClose} title={initial ? "Editar sentimento" : "Como você se sentiu?"}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 14 }}>
           {feelings.map(f => (
             <button key={f.key} onClick={() => setSentimento(f.key)} style={{
@@ -825,28 +1019,28 @@ function DiaryModal({ step, onClose, onSave }) {
         </div>
         <Field label="O que gerou esse sentimento?"><input style={input} value={gatilho} onChange={e => setGatilho(e.target.value)} placeholder="Ex: comentário de um colega" /></Field>
         <Field label="Como você agiu em seguida?"><input style={input} value={reacao} onChange={e => setReacao(e.target.value)} placeholder="Ex: saí para respirar" /></Field>
-        <button style={btnPrimary} disabled={!sentimento} onClick={() => sentimento && onSave({ category: "sentimento", sentimento, gatilho, reacao })}>Salvar registro</button>
+        <button style={btnPrimary} disabled={!sentimento} onClick={() => sentimento && onSave({ category: "sentimento", sentimento, gatilho, reacao })}>{initial ? "Salvar alterações" : "Salvar registro"}</button>
       </Modal>
     );
   }
 
   const isImp = step === "impulsividade";
   return (
-    <Modal onClose={onClose} title={isImp ? "Registrar impulsividade" : "Registrar desatenção"}>
+    <Modal onClose={onClose} title={initial ? "Editar registro" : (isImp ? "Registrar impulsividade" : "Registrar desatenção")}>
       <Field label="Quando você percebeu isso? (contexto)"><input style={input} value={contexto} onChange={e => setContexto(e.target.value)} placeholder={isImp ? "Ex: no meio de uma reunião" : "Ex: estudando para a prova"} /></Field>
       <Field label="Como isso afetou seu dia?"><input style={input} value={impacto} onChange={e => setImpacto(e.target.value)} placeholder="Ex: perdi o fio do que estava fazendo" /></Field>
-      <button style={btnPrimary} onClick={() => onSave({ category: step, contexto, impacto })}>Salvar registro</button>
+      <button style={btnPrimary} onClick={() => onSave({ category: step, contexto, impacto })}>{initial ? "Salvar alterações" : "Salvar registro"}</button>
     </Modal>
   );
 }
 
-function MedicationModal({ onClose, onSave }) {
-  const [nome, setNome] = useState("");
-  const [horario, setHorario] = useState("");
-  const [sensacao, setSensacao] = useState("bem");
-  const [detalhe, setDetalhe] = useState("");
+function MedicationModal({ initial, onClose, onSave }) {
+  const [nome, setNome] = useState(initial ? initial.nome : "");
+  const [horario, setHorario] = useState(initial ? initial.horario : "");
+  const [sensacao, setSensacao] = useState(initial ? initial.sensacao : "bem");
+  const [detalhe, setDetalhe] = useState(initial ? initial.detalhe || "" : "");
   return (
-    <Modal onClose={onClose} title="Registrar medicação">
+    <Modal onClose={onClose} title={initial ? "Editar medicação" : "Registrar medicação"}>
       <Field label="Nome da medicação"><input style={input} value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Ritalina 10mg" /></Field>
       <Field label="Horário que tomou"><input type="time" style={input} value={horario} onChange={e => setHorario(e.target.value)} /></Field>
       <Field label="Como se sentiu depois?">
@@ -860,7 +1054,7 @@ function MedicationModal({ onClose, onSave }) {
         </div>
         <input style={input} value={detalhe} onChange={e => setDetalhe(e.target.value)} placeholder="Detalhes (opcional): ex. sonolência, boca seca..." />
       </Field>
-      <button style={btnPrimary} disabled={!nome || !horario} onClick={() => nome && horario && onSave({ nome, horario, sensacao, detalhe })}>Salvar</button>
+      <button style={btnPrimary} disabled={!nome || !horario} onClick={() => nome && horario && onSave({ nome, horario, sensacao, detalhe })}>{initial ? "Salvar alterações" : "Salvar"}</button>
     </Modal>
   );
 }
